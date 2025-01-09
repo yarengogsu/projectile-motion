@@ -1,0 +1,158 @@
+import matplotlib.pyplot as plt
+from matplotlib.patches import Circle, Rectangle
+from tkinter import *
+from tkinter import ttk, messagebox
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import numpy as np
+from matplotlib.animation import FuncAnimation
+import pandas as pd
+
+g = 9.81
+time_step = 0.01
+man_height = 1.9
+man_distance = 4.0
+head_radius = 0.05
+body_height = man_height - head_radius * 2
+body_width = 0.1 * 10
+
+
+def read_input_data():
+    with open("projectile_data.txt", "r") as file:
+        velocity = float(file.readline().strip())
+        angle = float(file.readline().strip())
+        height = float(file.readline().strip())
+    return velocity, angle, height
+
+
+def update_input_fields():
+    velocity, angle, height = read_input_data()
+    velocity_entry.delete(0, END)
+    velocity_entry.insert(0, str(velocity))
+    angle_entry.delete(0, END)
+    angle_entry.insert(0, str(angle))
+    height_entry.delete(0, END)
+    height_entry.insert(0, str(height))
+    update_plot()  # Automatically update the simulation
+
+
+def simulate_projectile_motion(initial_velocity, launch_angle, initial_height):
+    launch_angle_rad = np.deg2rad(launch_angle)
+    vx = initial_velocity * np.cos(launch_angle_rad)
+    vy = initial_velocity * np.sin(launch_angle_rad)
+
+    # Time array using linspace for precision
+    total_time = (2 * vy + np.sqrt((2 * vy)**2 + 8 * g * initial_height)) / g
+    t = np.linspace(0, total_time, int(total_time / time_step) + 1)
+
+    x = vx * t
+    y = vy * t - 0.5 * g * t ** 2 + initial_height
+    return x, y, t
+
+
+def update_plot():
+    global ani
+    initial_velocity = float(velocity_entry.get())
+    launch_angle = float(angle_entry.get())
+    initial_height = float(height_entry.get())
+
+    if initial_velocity < 0.1:
+        messagebox.showerror("Error", "Velocity must be greater than 0.")
+        return
+    if launch_angle < -90 or launch_angle > 90:
+        messagebox.showerror("Error", "Angle must be between -90 and 90 degrees.")
+        return
+
+    x, y, t = simulate_projectile_motion(initial_velocity, launch_angle, initial_height)
+    ground_hit_index = np.where(y <= 0)[0][0]
+
+    def animate(frame):
+        if frame >= ground_hit_index:
+            ani.event_source.stop()
+
+        trajectory_data.set_data(x[:frame], y[:frame])
+        ball.center = (x[frame], y[frame])
+        ax_anim.set_xlim(0, max(20, x[frame] + 1))
+        ax_anim.set_ylim(0, max(20, y[frame] + 1))
+        time_text.set_text(f"Time: {t[frame]:.2f} s")
+
+        return trajectory_data, ball, time_text
+
+    ani = FuncAnimation(fig_anim, animate, frames=len(x), interval=10, blit=False, repeat=False)
+    canvas_anim.draw()
+
+
+root = Tk()
+root.title("Projectile Motion Visualization")
+
+main_frame = Frame(root)
+main_frame.pack(fill=BOTH, expand=True)
+
+table_frame = Frame(main_frame)
+table_frame.pack(side=LEFT, fill=BOTH, expand=True)
+
+data = pd.read_csv("projectile_table.csv")
+tree = ttk.Treeview(table_frame, columns=list(data.columns), show="headings")
+for col in data.columns:
+    tree.heading(col, text=col)
+    tree.column(col, width=150)
+for _, row in data.iterrows():
+    tree.insert("", "end", values=list(row))
+tree.pack(fill=BOTH, expand=True)
+
+graph_frame = Frame(main_frame)
+graph_frame.pack(side=LEFT, fill=BOTH, expand=True)
+
+fig_static, ax_static = plt.subplots(figsize=(5, 4))
+ax_static.plot(data["Time(s)"], data["Horizontal Position (m)"], label="X Position")
+ax_static.plot(data["Time(s)"], data["Vertical Position (m)"], label="Y Position")
+ax_static.set_title("Projectile Motion Graph")
+ax_static.legend()
+ax_static.grid(True)  # Add grid lines for clarity
+canvas_static = FigureCanvasTkAgg(fig_static, master=graph_frame)
+canvas_static.get_tk_widget().pack(fill=BOTH, expand=True)
+
+animation_frame = Frame(main_frame)
+animation_frame.pack(side=LEFT, fill=BOTH, expand=True)
+
+fig_anim, ax_anim = plt.subplots(figsize=(7, 5))
+trajectory_data, = ax_anim.plot([], [], 'b-', label="Trajectory")
+ball = Circle((0, 0), 0.2, color='red', zorder=5)
+ax_anim.add_patch(ball)
+ax_anim.plot([4, 20], [1.9, 5], color='lightgrey', linestyle='dashed')
+ax_anim.plot([4, 20], [1.9, -5], color='lightgrey', linestyle='dashed')
+ax_anim.add_patch(Rectangle((man_distance - body_width / 2, 0), body_width, body_height, color='orange'))
+ax_anim.add_patch(Circle((man_distance, man_height - head_radius), head_radius, color='orange'))
+ax_anim.text(man_distance, -0.1, "Man", fontsize=12, ha="center", va="top")
+ax_anim.set_facecolor((0.8, 0.9, 1))
+ax_anim.grid(True)  # Add grid lines for clarity
+time_text = ax_anim.text(0.02, 0.95, "Time: 0.00 s", transform=ax_anim.transAxes)
+
+canvas_anim = FigureCanvasTkAgg(fig_anim, master=animation_frame)
+canvas_anim.get_tk_widget().pack(fill=BOTH, expand=True)
+
+control_frame = Frame(root)
+control_frame.pack(fill=X)
+
+velocity_label = Label(control_frame, text="Velocity (m/s):")
+velocity_label.pack(side=LEFT)
+velocity_entry = Entry(control_frame)
+velocity_entry.pack(side=LEFT)
+
+angle_label = Label(control_frame, text="Angle (°):")
+angle_label.pack(side=LEFT)
+angle_entry = Entry(control_frame)
+angle_entry.pack(side=LEFT)
+
+height_label = Label(control_frame, text="Height (m):")
+height_label.pack(side=LEFT)
+height_entry = Entry(control_frame)
+height_entry.pack(side=LEFT)
+
+start_button = Button(control_frame, text="Start Animation", command=update_plot)
+start_button.pack(side=LEFT)
+
+update_button = Button(control_frame, text="Update from File", command=update_input_fields)
+update_button.pack(side=LEFT)
+
+update_input_fields()
+root.mainloop()
