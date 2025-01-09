@@ -1,0 +1,174 @@
+#include <iostream>
+#include <fstream>
+#include <cmath> 
+#include <iomanip> 
+#include <cstdlib> 
+
+using namespace std;
+const double horizontaldistance = 40.0;     // man harizontal distance (m)
+const double personHeight = 1.9;           // Man's height (m)
+const double g = 9.8;  // Gravitational acceleration in m/s^2
+const double PI = 3.14159; //pi
+
+bool willHit(double velocity, double angle, double height) {
+    //Convert angle to radians
+    double angleRad = angle * PI / 180.0;
+
+    //Horizontal and vertical velocity components of the snowball
+    double vx = velocity * cos(angleRad);
+    double vy = velocity * sin(angleRad);
+
+    // Calculate the time at the man's location (x = vx * t)
+    double time = horizontaldistance / vx;
+
+    // Calculate the height of the snowball at this time (y = h + vy * t - 0.5 * g * t^2)
+    double y = height + vy * time - 0.5 * g * time * time;
+
+    //Is the height of the snowball equal to or less than the man's height?
+
+    return y <= personHeight && y >= 0;
+}
+
+void simulateProjectile(double velocity, double angle, double height, double time) {
+    double angleRead = angle * PI / 180.0;
+    double vx = velocity * cos(angleRead);
+    double vy = velocity * sin(angleRead);
+    double t = 0.0;
+    double x = 0.0, y = height;
+
+    cout << setw(8) << " Time(s) " << setw(12) << " X(m) " << setw(12) << "Y(m)" << setw(12) << " Vx(m/s) " << setw(12) << "Vy(m/s)" << endl;
+    cout << string(56, '-') << endl;
+
+    while (y >= 0) {
+
+        cout << fixed << setprecision(2);
+        cout << setw(8) << t << setw(12) << x << setw(12) << y << setw(12) << vx << setw(12) << vy << endl;
+
+        t += time;
+        x = vx * t;
+        y = height + vy * t - 0.5 * g * t * t;
+        vy = velocity * sin(angleRead) - g * t;
+
+    }
+}
+
+int main() {
+
+    double d, v0, angle; /*d = initial height, vo = initial speed,angle = angle of projection */
+    char continueProgram; // Whether user will continue or not
+    char direction;
+    do {
+
+        cout << "Enter the initial height (in meters): ";
+        cin >> d;
+
+        cout << "Enter the initial speed (in m/s): ";
+        cin >> v0;
+
+        cout << "Enter the angle of projection (in degrees): ";
+        cin >> angle;
+
+        cout << "Is the initial velocity upwards or downwards? (Enter '+' for up or '-' for down): ";
+        cin >> direction;
+
+        double angle_rad = angle * (PI / 180); // Convert degrees to radians
+
+        double v0x = v0 * cos(angle_rad); // Horizontal velocity component
+        double v0y;
+
+        if (direction == '+') {
+            v0y = v0 * sin(angle_rad); // Upwards initial vertical velocity
+        }
+        else if (direction == '-') {
+            v0y = v0 * sin(-angle_rad); // Downwards initial vertical velocity
+        }
+        else {
+            cout << "Invalid input for velocity direction!" << endl;
+            return 1; // Exit the program if input is invalid
+        }
+
+        // Descision mechanism
+        if (willHit(v0, angle, personHeight)) {
+            cout << "The snowball will hit the man!\n";
+        }
+        else {
+            cout << "The snowball will not hit the man.\n";
+        }
+
+        // Time calculation: time to hit the ground (when y(t) = 0)
+        double t = (v0y + sqrt(pow(v0y, 2) + 2 * g * d)) / g;
+
+        cout << "Time to hit the ground: " << fixed << setprecision(2) << t << " seconds" << endl;
+
+        // Simulation
+        simulateProjectile(v0, angle, d, t);
+
+        double spesificTime = 0.01; // Time interval for calculations
+
+        cout << "\nTime(s)\t\tHorizontal Position (m)\t\tVertical Position (m)" << endl;
+
+        for (double time = 0; time <= t; time += spesificTime) {
+
+            double x = v0x * time;// Calculate horizontal position x(t)
+            double y = d + (v0y * time - 0.5 * g * pow(time, 2));
+            /* Calculate vertical position y(t)*/
+
+            cout << fixed << setprecision(2) << time << "\t\t" << x << "\t\t\t\t" << y << endl;
+
+            // Break the loop if the ball hits the ground (y <= 0)
+            if (y <= 0) {
+                break;
+            }
+        }
+
+
+        // We used pyhton to simulate motion.
+        // Writing data to a file
+        ofstream dataFile("projectile_data.txt");
+        if (dataFile.is_open()) {
+            // Adjust angle based on direction
+            double adjustedAngle = (direction == '-') ? -angle : angle;
+
+            // Write data to the file
+            dataFile << v0 << "\n";              // Velocity
+            dataFile << adjustedAngle << "\n";   // Adjusted angle
+            dataFile << d << "\n";               // Height
+            dataFile.close();
+
+            cout << "Data saved to 'projectile_data.txt'." << endl;
+        }
+        else {
+            cout << "Unable to open file." << endl;
+        }
+
+        ofstream outFile("projectile_table.csv");
+        if (outFile.is_open()) {
+            outFile << "Time(s),Horizontal Position (m),Vertical Position (m)\n";
+            for (double time = 0; time <= t; time += spesificTime) {
+                double x = v0x * time; // Horizontal position
+                double y = d + (v0y * time - 0.5 * g * pow(time, 2)); // Vertical position
+                outFile << fixed << setprecision(2) << time << "," << x << "," << y << "\n";
+
+                if (y <= 0) {
+                    break;
+                }
+            }
+            outFile.close();
+            cout << "Table saved to 'projectile_table.csv'." << endl;
+        }
+
+        // Executing a Python file with C++
+        system("start /B python .\\projectileMotion.py.py");
+
+        
+        // Ask the user whether wants continue
+        cout << "\nDo you want to run the program again? (y/n): ";
+        cin >> continueProgram;
+    }
+ while (continueProgram == 'y' || continueProgram == 'Y');
+
+cout << "Program terminated. Goodbye!" << endl;
+
+
+    return 0;
+}
